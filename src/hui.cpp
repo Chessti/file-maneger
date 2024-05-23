@@ -1,6 +1,6 @@
 #include <stdio.h>
 
 int main(){
-    printf("hui\n");
+    printf("fuck the iostream\n");
     return 0;
 }
