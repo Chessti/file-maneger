@@ -1,27 +1,53 @@
 #include <ncurses.h>
 
+#include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <vector>
 
 namespace fs = std::filesystem;
+
+std::string formatFileSize(uintmax_t size) {
+  std::ostringstream oss;
+  oss << std::fixed << std::setprecision(2) << (size / 1024.0) << " KB";
+  return oss.str();
+}
+
+std::string formatTime(std::filesystem::file_time_type fileTime) {
+  auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+      fileTime - fs::file_time_type::clock::now() +
+      std::chrono::system_clock::now());
+  std::time_t cftime = std::chrono::system_clock::to_time_t(sctp);
+  std::ostringstream oss;
+  oss << std::put_time(std::localtime(&cftime), "%Y-%m-%d %H:%M:%S");
+  return oss.str();
+}
 
 void displayFiles(const std::vector<fs::directory_entry>& files, int selected,
                   const fs::path& markedFile) {
   clear();
   for (size_t i = 0; i < files.size(); ++i) {
-    if (files[i].path() == markedFile) {
+    const auto& file = files[i];
+    std::string fileName = file.path().filename().string();
+    std::string fileSize =
+        fs::is_directory(file) ? "DIR" : formatFileSize(fs::file_size(file));
+    std::string fileTime = formatTime(fs::last_write_time(file));
+
+    if (file.path() == markedFile) {
       attron(A_BOLD | A_UNDERLINE);  // Mark the file
     }
     if (i == selected) {
       attron(A_REVERSE);
     }
-    mvprintw(i, 0, "%s", files[i].path().filename().string().c_str());
+    mvprintw(i, 0, "%-30s %10s %20s", fileName.c_str(), fileSize.c_str(),
+             fileTime.c_str());
     if (i == selected) {
       attroff(A_REVERSE);
     }
-    if (files[i].path() == markedFile) {
+    if (file.path() == markedFile) {
       attroff(A_BOLD | A_UNDERLINE);
     }
   }
@@ -52,24 +78,29 @@ void deleteFileOrDirectory(const fs::path& path) {
 
 void displayFileContent(const fs::path& filePath) {
   clear();
-  std::ifstream file(filePath);
-  if (file.is_open()) {
-    std::vector<std::string> lines;
+  std::ifstream file(filePath);// соединяемся с файлом
+  // если файл открылся то что-то показываем, если нет то ошибка
+  if (file.is_open()) { 
+    std::vector<std::string> lines; // инициализация массива строк
     std::string line;
+    // получаем все сроки в масиив
     while (std::getline(file, line)) {
       lines.push_back(line);
     }
-    file.close();
+    file.close();// закрываем соединеие с файлом
 
     int offset = 0;
     int ch;
+    //обновляем экран бесконечно
     while (true) {
-      clear();
+      clear(); // отчистка экрана
+      // цикл выводит пока не конец экрана или не конец файла
       for (int i = 0; i < LINES - 1 && i + offset < lines.size(); ++i) {
         mvprintw(i, 0, "%s", lines[i + offset].c_str());
       }
-      refresh();
+      refresh(); // обновление экрана 
       ch = getch();
+      // условия выхода
       if (ch == 'q' || ch == 27) {  // Exit on 'q' or ESC key
         break;
       } else if (ch == KEY_UP) {
